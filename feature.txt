@@ -1,0 +1,72 @@
+お弁当販売数予測に効果的な特徴量例
+
+1. 時系列特徴量（重要度：高）
+# 曜日効果をより詳細に
+dat['is_monday'] = (dat['week'] == '月').astype(int)
+dat['is_friday'] = (dat['week'] == '金').astype(int)
+
+# 月末・月初効果
+dat['is_month_end'] = pd.to_datetime(dat['datetime']).dt.day >= 25
+dat['is_month_start'] = pd.to_datetime(dat['datetime']).dt.day <= 5
+
+# 季節性
+dat['quarter'] = pd.to_datetime(dat['datetime']).dt.quarter
+
+2. ラグ特徴量（前日・前週の売上情報）
+# 前日の売上（強力な特徴量になることが多い）
+dat['y_lag1'] = dat.groupby('t')['y'].shift(1)
+
+# 前週同曜日の売上
+dat['y_lag7'] = dat.groupby('t')['y'].shift(7)
+
+# 直近3日の売上平均
+dat['y_rolling_3'] = dat.groupby('t')['y'].rolling(3).mean().reset_index(0, drop=True)
+
+3. 交互作用特徴量
+# 天気×曜日（雨の月曜は特に売上が下がる等）
+dat['weather_week'] = dat['weather'] + '_' + dat['week']
+
+# お楽しみメニュー×天気
+dat['fun_weather'] = dat['fun'].astype(str) + '_' + dat['weather']
+
+# 給料日×曜日
+dat['payday_week'] = dat['payday'].astype(str) + '_' + dat['week']
+
+4. 数値特徴量の変換
+# 気温の非線形変換
+dat['temp_squared'] = dat['temperature'] ** 2
+dat['temp_binned'] = pd.cut(dat['temperature'], bins=5, labels=False)
+
+# 降水量のカテゴリ化
+dat['rain_category'] = pd.cut(dat['precipitation'], 
+                              bins=[-2, -1, 0, 5, float('inf')], 
+                              labels=['missing', 'no_rain', 'light', 'heavy'])
+
+5. メニュー関連特徴量
+# メニュー名からの特徴抽出
+dat['has_meat'] = dat['name'].str.contains('肉|チキン|豚|牛', na=False).astype(int)
+dat['has_fish'] = dat['name'].str.contains('魚|サーモン|さば', na=False).astype(int)
+dat['has_veggie'] = dat['name'].str.contains('野菜|サラダ', na=False).astype(int)
+
+# カロリー帯
+dat['kcal_high'] = (dat['kcal'] > dat['kcal'].median()).astype(int)
+
+6. 統計的特徴量
+# 過去の同じメニューの平均売上
+menu_avg = dat.groupby('name')['y'].transform('mean')
+dat['menu_avg_sales'] = menu_avg
+
+# 過去の同じ天気の平均売上
+weather_avg = dat.groupby('weather')['y'].transform('mean')
+dat['weather_avg_sales'] = weather_avg
+
+# 特徴量の重要度と効果について
+最も効果的な特徴量（お弁当販売予測）
+・交互作用特徴量 (weather_week, fun_weather)：天気×曜日、お楽しみメニュー×天気
+・時系列特徴量 (is_monday, is_friday, is_month_end)：曜日、月末月初効果
+・メニュー特徴量 (has_meat, has_fish, has_veggie)：肉・魚・野菜の分類
+・非線形変換 (temperature_squared)による気温の非線形関係の捕捉
+注意点
+・小データセットでは特徴量を増やしすぎると過学習のリスクあり
+・カテゴリ特徴量はone-hot化で列数が爆発する可能性
+・欠損値処理を適切に行う必要がある
